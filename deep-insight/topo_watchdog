@@ -1,0 +1,111 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright 2021-present Open Networking Foundation.
+# SPDX-License-Identifier: Apache-2.0
+
+import argparse
+import json
+import logging
+import os
+import sys
+import time
+
+from deepinsight import DeepInsightClient, gen_topo
+
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger(__name__)
+
+parser = argparse.ArgumentParser(
+    os.path.basename(__file__), formatter_class=argparse.ArgumentDefaultsHelpFormatter
+)
+
+parser.add_argument(
+    "--di-addr",
+    help="DeepInsight address",
+    default="gateway-service-internal.deepinsight:3030",
+)
+parser.add_argument("--di-user", help="DeepInsight username", default="diadmin")
+parser.add_argument("--di-pass", help="DeepInsight password", default="diadmin")
+parser.add_argument(
+    "-s", "--secure", help="Verify SSL certificate", action="store_true"
+)
+parser.add_argument(
+    "--onos-addr", help="ONOS address", default="onos-tost-onos-classic-hs.tost:8181"
+)
+parser.add_argument("--onos-user", help="ONOS username", default="onos")
+parser.add_argument("--onos-pass", help="ONOS password", default="rocks")
+parser.add_argument(
+    "--k8s-subnet",
+    help="Default K8s cluster subnet used for inter-node communication (in the CIDR format).",
+    type=str,
+    default="",
+)
+parser.add_argument(
+    "--node-iface-no",
+    help="Default K8s node interface number retrieved via `ip link`. "
+    "The script assumes the same number on each K8s node.",
+    type=int,
+    default=0,
+)
+parser.add_argument("--k8s-config", help="Kubernetes config", type=str, default=None)
+parser.add_argument(
+    "--delay", help="Delay between each check in seconds", type=float, default=60.0
+)
+args = parser.parse_args()
+
+
+def main():
+    di_server_url = f"https://{args.di_addr}"
+    onos_url = f"http://{args.onos_addr}/onos/v1"
+    with_end_host = args.k8s_subnet != ""
+    json_file = "/tmp/topo.json"
+    if not os.path.exists(json_file):
+        # initialize topology json file.
+        with open(json_file, "w") as f:
+            f.write("{}")
+
+    while True:
+        try:
+            topo = gen_topo(
+                onos_url,
+                args.onos_user,
+                args.onos_pass,
+                with_end_host,
+                args.k8s_subnet,
+                args.node_iface_no,
+                args.k8s_config,
+            )
+            with open(json_file, "r") as f:
+                current_topo = json.load(f)
+                if current_topo == topo:
+                    log.info("No change in topology")
+                    time.sleep(args.delay)
+                    continue
+            with open(json_file, "w") as f:
+                json.dump(topo, f)
+            client = DeepInsightClient(
+                server_url=di_server_url,
+                username=args.di_user,
+                password=args.di_pass,
+                verify_ssl=args.secure,
+            )
+            resp = client.upload_topology_json(topo)
+            if "error" in resp:
+                # Reset the topology file so the watchdog will try to upload it again later.
+                with open(json_file, "w") as f:
+                    f.write("{}")
+            else:
+                log.info("Topology uploaded successfully")
+            time.sleep(args.delay)
+        except KeyboardInterrupt:
+            log.info("Topology watchdog exit successfully.")
+            break
+        except Exception as e:
+            log.error(e)
+            # Exit the watchdog if any exception occurs.
+            # This cause the Kubernetes restarts the POD, and the alert system(e.g., Slack)
+            # will send out the alert.
+            sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
