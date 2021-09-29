@@ -9,8 +9,16 @@ The utility for Intel/Barefoot DeepInsight.
 
 ## Install the utility
 
+Install the utility from local source
+
 ```bash
-python3 setup.py install --user
+python3 setup.py install
+```
+
+Or install the utility with `pip3` command
+
+```bash
+pip3 install git+ssh://git@github.com/opennetworkinglab/sdfabric-utils.git#subdirectory=deep-insight
 ```
 
 ## Usage
