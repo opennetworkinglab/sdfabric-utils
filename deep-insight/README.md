@@ -9,13 +9,13 @@ The utility for Intel/Barefoot DeepInsight.
 
 ## Install the utility
 
-Install the utility from local source
+Install from local source
 
 ```bash
 python3 setup.py install
 ```
 
-Or install the utility with `pip3` command
+Or install with `pip3` command
 
 ```bash
 pip3 install git+ssh://git@github.com/opennetworkinglab/sdfabric-utils.git#subdirectory=deep-insight
@@ -57,8 +57,7 @@ optional arguments:
 
 ## Auto-generate topology from ONOS and upload to DeepInsight
 
-If using TOST (Trellis+ONOS+Stratum+Tofino), you can use the subcommand
-`gen-topology` to automatically generate a topology file from a running ONOS instance.
+You can use the subcommand `gen-topology` to generate a topology file from a running ONOS instance.
 
 The subcommand uses the ONOS REST API to fetch the required information:
 
@@ -66,7 +65,7 @@ The subcommand uses the ONOS REST API to fetch the required information:
 ./di gen-topology -s localhost:8181 -u karaf -p karaf -o topo.json
 ```
 
-### Auto-generate topology for end-host INT
+### Auto-generate topology with end-host INT
 
 If you use end-host INT support for the Kubernetes CNI, you can generate the DeepInsight topology file by
 using `--k8s-subnet` and `--node-iface-no` argument.

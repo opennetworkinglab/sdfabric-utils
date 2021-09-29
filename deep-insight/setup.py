@@ -27,7 +27,7 @@ setup(
     ],
     description="The utility for DeepInsight",
     license="LicenseRef-ONF-Member-Only-1.0",
-    url="https://github.com/opennetworkinglab/bf-di-scripts/",
+    url="https://github.com/opennetworkinglab/sdfabric-utils/",
     scripts=[
         "di",
         "topo_watchdog",
