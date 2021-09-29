@@ -6,78 +6,12 @@ import argparse
 import json
 import os
 
-from deepinsight import DeepInsightClient, gen_topo
+from deepinsight import gen_topo
 
 parser = argparse.ArgumentParser(
     os.path.basename(__file__), formatter_class=argparse.ArgumentDefaultsHelpFormatter
 )
-parser.add_argument(
-    "--server-addr", help="DeepInsight API address", default="127.0.0.1:3030"
-)
-parser.add_argument(
-    "-s", "--secure", help="Verify SSL certificate", action="store_true"
-)
-parser.add_argument("-u", "--username", help="DeepInsight username", default="diadmin")
-parser.add_argument("-p", "--password", help="DeepInsight password", default="diadmin")
-subparsers = parser.add_subparsers(dest="command", help="The command", required=True)
-
-# sub commands
-sp = subparsers.add_parser("upload-license", help="Upload license file")
-sp.add_argument("license_file", help="The license file")
-
-sp = subparsers.add_parser("upload-topology", help="Upload topology json file")
-sp.add_argument("topology_json", help="The topology file")
-
-sp = subparsers.add_parser("get-flows", help="Get flows")
-sp.add_argument("--start-time", help="The start time", default=None, type=int)
-sp.add_argument("--end-time", help="The end time", default=None, type=int)
-sp.add_argument("--max-results", help="Max results", default=100)
-sp.add_argument("--src-ip", help="Source IP", default=None)
-sp.add_argument("--dst-ip", help="Destination IP", default=None)
-sp.add_argument("--src-port", help="L4 source port", default=None)
-sp.add_argument("--dst-port", help="L4 destination port", default=None)
-sp.add_argument("--ip-proto", help="IP protocol", default=None)
-
-sp = subparsers.add_parser(
-    "get-switch-packet-drop", help="Get packet drop from a switch"
-)
-sp.add_argument("switch_id", help="The switch id")
-sp.add_argument("--start-time", help="The start time", default=None)
-sp.add_argument("--end-time", help="The end time", default=None)
-sp.add_argument(
-    "--num-buckets",
-    help="Total number of buckets to return within the timeframe",
-    default=100,
-)
-sp.add_argument("--egress-port", help="EgressPort on Switch", default=0)
-sp.add_argument(
-    "--queue-id", help="ID of Queue for specified EgressPort on Switch", default=0
-)
-
-sp = subparsers.add_parser("get-switch-anomalies", help="Get anomalies from a switch")
-sp.add_argument("switch_id", help="The switch id")
-sp.add_argument("--start-time", help="The start time", default=None)
-sp.add_argument("--end-time", help="The end time", default=None)
-
-sp = subparsers.add_parser("get-switch-latencies", help="Get latencies from a switch")
-sp.add_argument("switch_id", help="The switch id")
-sp.add_argument("--start-time", help="The start time", default=None)
-sp.add_argument("--end-time", help="The end time", default=None)
-sp.add_argument(
-    "--granularity",
-    help="Size of buckets into which returned counts should be aggregated (in ms)",
-    default=1000,
-)
-
-sp = subparsers.add_parser("get-anomaly-records", help="Get anomaly records")
-sp.add_argument("--start-time", help="The start time", default=None, type=int)
-sp.add_argument("--end-time", help="The end time", default=None, type=int)
-sp.add_argument("--src-ip", help="Source IP", default=None)
-sp.add_argument("--dst-ip", help="Destination IP", default=None)
-sp.add_argument("--src-port", help="L4 source port", default=None)
-sp.add_argument("--dst-port", help="L4 destination port", default=None)
-sp.add_argument("--ip-proto", help="IP protocol", default=None)
-sp.add_argument("--anomaly-type", help="Anomaly type", default=None)
+subparsers = parser.add_subparsers(dest="command", help="Subcommands", required=True)
 
 sp = subparsers.add_parser("gen-topology", help="Generate topology json file")
 sp.add_argument(
@@ -119,7 +53,6 @@ sp.add_argument(
 
 args = parser.parse_args()
 
-
 def main():
     if args.command == "gen-topology":
         with_end_host = args.k8s_subnet != ""
@@ -139,73 +72,6 @@ def main():
         else:
             print(json.dumps(topo_json, indent=2))
         return
-    server_url = f"https://{args.server_addr}"
-    di = DeepInsightClient(
-        server_url=server_url,
-        username=args.username,
-        password=args.password,
-        verify_ssl=args.secure,
-    )
-    results = None
-    if args.command == "upload-license":
-        msg = di.upload_license_file(args.license_file)
-        if "error" not in msg:
-            print(f"License file {args.license_file} uploaded successfully")
-
-    if args.command == "upload-topology":
-        msg = di.upload_topology_json_file(args.topology_json)
-        if "error" not in msg:
-            print(f"Topology file {args.topology_json} uploaded successfully")
-
-    if args.command == "get-flows":
-        results = di.get_flows(
-            args.start_time,
-            args.end_time,
-            args.max_results,
-            args.src_ip,
-            args.dst_ip,
-            args.src_port,
-            args.dst_port,
-            args.ip_proto,
-        )
-
-    if args.command == "get-switch-packet-drop":
-        results = di.get_switch_packet_drop(
-            args.switch_id,
-            args.egress_port,
-            args.queue_id,
-            args.start_time,
-            args.end_time,
-            args.num_buckets,
-        )
-
-    if args.command == "get-switch-anomalies":
-        results = di.get_switch_anomalies(
-            args.switch_id, args.start_time, args.end_time
-        )
-
-    if args.command == "get-switch-latencies":
-        results = di.get_switch_latencies(
-            args.switch_id, args.start_time, args.end_time, args.granularity
-        )
-
-    if args.command == "get-anomaly-records":
-        results = di.get_anomaly_records(
-            args.start_time,
-            args.end_time,
-            args.src_ip,
-            args.dst_ip,
-            args.src_port,
-            args.dst_port,
-            args.ip_proto,
-            args.anomaly_type,
-        )
-
-    if results is not None and "error" not in results:
-        print(json.dumps(results, indent=4))
-
-    di.logout()
-
 
 if __name__ == "__main__":
     main()
