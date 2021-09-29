@@ -24,10 +24,12 @@ pip3 install git+ssh://git@github.com/opennetworkinglab/sdfabric-utils.git#subdi
 ## Usage
 
 ```sh
-usage: di [-h] [--server-url SERVER_URL] [-s] [-u USERNAME] [-p PASSWORD] {upload-license,upload-topology,get-flows,get-switch-packet-drop,get-switch-anomalies,get-switch-latencies,gen-topology} ...
+usage: di [-h] [--server-addr SERVER_ADDR] [-s] [-u USERNAME] [-p PASSWORD]
+          {upload-license,upload-topology,get-flows,get-switch-packet-drop,get-switch-anomalies,get-switch-latencies,get-anomaly-records,gen-topology}
+          ...
 
 positional arguments:
-  {upload-license,upload-topology,get-flows,get-switch-packet-drop,get-switch-anomalies,get-switch-latencies,gen-topology}
+  {upload-license,upload-topology,get-flows,get-switch-packet-drop,get-switch-anomalies,get-switch-latencies,get-anomaly-records,gen-topology}
                         The command
     upload-license      Upload license file
     upload-topology     Upload topology json file
@@ -38,17 +40,19 @@ positional arguments:
                         Get anomalies from a switch
     get-switch-latencies
                         Get latencies from a switch
+    get-anomaly-records
+                        Get anomaly records
     gen-topology        Generate topology json file
 
 optional arguments:
   -h, --help            show this help message and exit
-  --server-url SERVER_URL
-                        DeepInsight server URL (default: https://127.0.0.1:3030)
+  --server-addr SERVER_ADDR
+                        DeepInsight API address (default: 127.0.0.1:3030)
   -s, --secure          Verify SSL certificate (default: False)
   -u USERNAME, --username USERNAME
-                        username (default: diadmin)
+                        DeepInsight username (default: diadmin)
   -p PASSWORD, --password PASSWORD
-                        password (default: diadmin)
+                        DeepInsight password (default: diadmin)
 ```
 
 ## Auto-generate topology from ONOS and upload to DeepInsight
