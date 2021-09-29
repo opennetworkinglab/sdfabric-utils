@@ -51,7 +51,7 @@ optional arguments:
                         password (default: diadmin)
 ```
 
-## Auto-generate topology from ONOS and upload to DI
+## Auto-generate topology from ONOS and upload to DeepInsight
 
 If using TOST (Trellis+ONOS+Stratum+Tofino), you can use the subcommand
 `gen-topology` to automatically generate a topology file from a running ONOS instance.
@@ -64,7 +64,7 @@ The subcommand uses the ONOS REST API to fetch the required information:
 
 ### Auto-generate topology for end-host INT
 
-If you use end-host INT support for the Kubernetes CNI, you can generate the DI topology file by
+If you use end-host INT support for the Kubernetes CNI, you can generate the DeepInsight topology file by
 using `--k8s-subnet` and `--node-iface-no` argument.
 
 The subcommand will use both ONOS and Kubernetes API to build the topology file if `--k8s-subnet` parameter is present.
@@ -77,7 +77,7 @@ Note that `--k8s-config` is optional, by default the script will use the default
 
 ### Upload the topology to DeepInsight
 
-To upload the topology file to the DI. Use `upload-topology` subcommand:
+To upload the topology file to the DeepInsight. Use `upload-topology` subcommand:
 
 ```bash
 ./di upload-topology topo.json
