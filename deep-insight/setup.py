@@ -20,7 +20,6 @@ setup(
     author="PDP Team",
     author_email="yi@opennetworking.org",
     classifiers=[
-        "License :: OSI Approved :: Apache Software License",
         "Programming Language :: Python",
         "Programming Language :: Python :: 2.7",
         "Programming Language :: Python :: 3",
@@ -29,7 +28,6 @@ setup(
     license="LicenseRef-ONF-Member-Only-1.0",
     url="https://github.com/opennetworkinglab/sdfabric-utils/",
     scripts=[
-        "di",
-        "topo_watchdog",
+        "di"
     ],
 )
