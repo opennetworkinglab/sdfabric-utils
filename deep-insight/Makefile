@@ -1,5 +1,5 @@
 # SPDX-FileCopyrightText: Copyright 2021-present Open Networking Foundation.
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: LicenseRef-ONF-Member-Only-1.0
 
 VENV ?= venv
 DI_URL ?= https://127.0.0.1:3030
