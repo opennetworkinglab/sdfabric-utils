@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: Copyright 2021-present Open Networking Foundation.
+# SPDX-License-Identifier: Apache-2.0
 ipaddress==1.0.23
 requests==2.24.0
 netaddr==0.8.0
