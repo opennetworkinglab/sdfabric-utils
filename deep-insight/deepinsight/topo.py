@@ -229,7 +229,7 @@ def gen_topo(
 
     for subnet in topo["subnets"]:
         if subnet["ip_subnet"] == k8s_cluster_subnet:
-            k8s_subnet = subnet["ip_subnet"]
+            k8s_subnet = subnet
             break
     else:
         k8s_subnet = {
@@ -264,6 +264,8 @@ def gen_topo(
                 "hostname": hostname,
             }
         )
+    topo['switches'].extend(vswitches)
+
 
     all_host_subnets = k8s_node_cidrs + [k8s_subnet]
 
