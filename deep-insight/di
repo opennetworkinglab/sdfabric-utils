@@ -35,13 +35,6 @@ sp.add_argument(
     type=str,
     default="",
 )
-sp.add_argument(
-    "--node-iface-no",
-    help="Default K8s node interface number retrieved via `ip link`. "
-    "The script assumes the same number on each K8s node.",
-    type=int,
-    default=0,
-)
 sp.add_argument("--k8s-config", help="Kubernetes config", type=str, default=None)
 sp.add_argument(
     "-o",
@@ -63,7 +56,6 @@ def main():
             args.onos_password,
             with_end_host,
             args.k8s_subnet,
-            args.node_iface_no,
             args.k8s_config,
         )
         if args.output:
