@@ -268,7 +268,7 @@ def gen_topo(
             {
                 "name": name,
                 "ip": vswitch_ip,
-                "default-intf": node_iface,
+                "default-intf": str(node_iface),
                 "deviceType": "legacy",
                 "switchId": int(IPAddress(vswitch_ip)),
                 "hostname": hostname,
