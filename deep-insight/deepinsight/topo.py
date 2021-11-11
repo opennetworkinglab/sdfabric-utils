@@ -12,6 +12,7 @@ from netaddr import IPAddress
 
 log = logging.getLogger("DeepInsightTopoUtility")
 
+INT_HOST_REPORTER_TOPO_API="http://{}:4048/api/v1/topology"
 
 def parse_port_string(port_string):
     # Port string can be "[port/channel](id)" or just "id".
@@ -252,8 +253,10 @@ def gen_topo(
     vswitch_links = dict()
     vswitches = []
     for node_id, node_ip in enumerate(k8s_node_ips):
-        url = "http://" + node_ip + ":4048/api/v1/topology"
+        url = INT_HOST_REPORTER_TOPO_API.format(node_ip)
         host_topology = requests.get(url)
+        if not host_topology.ok:
+            log.fatal("Unable to access Topology API from K8s node %s\n%s", node_ip, host_topology.text)
 
         for link in host_topology.json()["links"]:
             if link["is-node-iface"]:
