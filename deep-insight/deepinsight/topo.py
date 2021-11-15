@@ -11,8 +11,8 @@ import requests
 from netaddr import IPAddress
 
 log = logging.getLogger("DeepInsightTopoUtility")
-MAX_VPORTS = 400
 
+INT_HOST_REPORTER_TOPO_API="http://{}:4048/api/v1/topology"
 
 def parse_port_string(port_string):
     # Port string can be "[port/channel](id)" or just "id".
@@ -30,7 +30,6 @@ def gen_topo(
     onos_pass="rocks",
     with_end_host=False,
     k8s_cluster_subnet="",
-    k8s_node_iface_no=0,
     k8s_config=None,
 ):
     """
@@ -250,20 +249,35 @@ def gen_topo(
         )
         subnet_id += 1
 
+
+    vswitch_links = dict()
     vswitches = []
     for node_id, node_ip in enumerate(k8s_node_ips):
-        hostname = [host["name"] for host in topo["hosts"] if host["ip"] == node_ip]
+        url = INT_HOST_REPORTER_TOPO_API.format(node_ip)
+        host_topology = requests.get(url)
+        if not host_topology.ok:
+            log.fatal("Unable to access Topology API from K8s node %s\n%s", node_ip, host_topology.text)
+
+        for link in host_topology.json()["links"]:
+            if link["is-node-iface"]:
+                node_iface = link["id"]
+                vswitch_ip = link["ip-addresses"][0]
+
+        hostname = [host["name"] for host in topo["hosts"] if host["ip"] == vswitch_ip]
         hostname = hostname[0] if len(hostname) != 0 else ""
+
+        name = "device:vswitch" + str(node_id)
         vswitches.append(
             {
-                "name": "device:vswitch" + str(node_id),
-                "ip": node_ip,
-                "default-intf": k8s_node_iface_no,
+                "name": name,
+                "ip": vswitch_ip,
+                "default-intf": str(node_iface),
                 "deviceType": "legacy",
-                "switchId": int(IPAddress(node_ip)),
+                "switchId": int(IPAddress(vswitch_ip)),
                 "hostname": hostname,
             }
         )
+        vswitch_links[name] = host_topology.json()["links"]
     topo['switches'].extend(vswitches)
 
 
@@ -273,19 +287,25 @@ def gen_topo(
     # Connects the physical switch to the host vswitch
     for link in topo["links"]:
         for sw in vswitches:
-            if link["node2"] == sw["hostname"]:
+            # find IP of an attached host
+            host_ip = [host["ip"] for host in topo["hosts"] if host["name"] == link["node2"]]
+            host_ip = host_ip[0] if len(host_ip) != 0 else ""
+            if host_ip == sw["ip"]:
                 link["port2"] = sw["default-intf"]
                 link["node2"] = sw["name"]
 
     # Connect vswitch to all possible subnets with all possible ports.
     for sw in vswitches:
         for host_subnet in all_host_subnets:
-            for i in range(int(sw["default-intf"]) + 1, MAX_VPORTS + 1):
+            for link in vswitch_links[sw["name"]]:
+                if link["is-node-iface"]:
+                    # skip data interfaces
+                    continue
                 topo["links"].append(
                     {
                         "node1": sw["name"],
                         "node2": host_subnet["name"],
-                        "port1": str(i),
+                        "port1": str(link["id"]),
                         "port2": "-1",
                     }
                 )
