@@ -29,8 +29,7 @@ def gen_topo(
     onos_user="onos",
     onos_pass="rocks",
     with_end_host=False,
-    k8s_cluster_subnet="",
-    k8s_config=None,
+    k8s_clusters=[],
 ):
     """
     Generate topology based on ONOS and K8s cluster topology.
@@ -39,9 +38,7 @@ def gen_topo(
     :param onos_user: The ONOS user, default is onos
     :param onos_pass: The ONOS password, default is rocks
     :param with_end_host: Include end hosts(k8s nodes), default is False
-    :param k8s_cluster_subnet: [For end host] The k8s cluster subnet, default is empty
-    :param k8s_node_iface_no: [For end host] The k8s node interface number, default is 0
-    :param k8s_config: [For end host] The k8s config file, default is None
+    :param k8s_clusters: [For end host] The list of K8s cluster info, default is empty
     """
     log.info(
         "Using ONOS REST APIs at %s (user:%s, password:%s)",
@@ -219,100 +216,107 @@ def gen_topo(
         return topo
 
     # End hosts topology config
-    k8s.config.load_kube_config(config_file=k8s_config)
-    k8s_node_ips = []
-    for node in k8s.client.CoreV1Api().list_node().items:
-        k8s_node_ips += [
-            item.address for item in node.status.addresses if item.type == "InternalIP"
-        ]
+    for idx, cluster in enumerate(k8s_clusters):
+        if not 'subnet' in cluster:
+            log.error("Missing 'subnet' in K8s cluster info [argument index=%d]: %s, skipping to add K8s cluster to topology file.", idx, cluster)
+            continue
+        k8s_config = cluster['config'] if 'config' in cluster else None
+        k8s_cluster_subnet = cluster['subnet']
 
-    for subnet in topo["subnets"]:
-        if subnet["ip_subnet"] == k8s_cluster_subnet:
-            k8s_subnet = subnet
-            break
-    else:
-        k8s_subnet = {
-            "name": k8s_cluster_subnet,
-            "ip_subnet": k8s_cluster_subnet,
-            "subnet_id": subnet_id,
-        }
-        subnet_id += 1
+        k8s.config.load_kube_config(config_file=k8s_config)
+        k8s_node_ips = []
+        for node in k8s.client.CoreV1Api().list_node().items:
+            k8s_node_ips += [
+                item.address for item in node.status.addresses if item.type == "InternalIP"
+            ]
 
-    k8s_node_cidrs = []
-    ipam_blocks = k8s.client.CustomObjectsApi().list_cluster_custom_object(
-        group="crd.projectcalico.org", version="v1", plural="ipamblocks"
-    )
-    for item in ipam_blocks["items"]:
-        cidr = item["spec"]["cidr"]
-        k8s_node_cidrs.append(
-            {"name": str(cidr), "ip_subnet": str(cidr), "subnet_id": subnet_id}
-        )
-        subnet_id += 1
-
-
-    vswitch_links = dict()
-    vswitches = []
-    for node_id, node_ip in enumerate(k8s_node_ips):
-        url = INT_HOST_REPORTER_TOPO_API.format(node_ip)
-        host_topology = requests.get(url)
-        if not host_topology.ok:
-            log.fatal("Unable to access Topology API from K8s node %s\n%s", node_ip, host_topology.text)
-
-        for link in host_topology.json()["links"]:
-            if link["is-node-iface"]:
-                node_iface = link["id"]
-                vswitch_ip = link["ip-addresses"][0]
-
-        hostname = [host["name"] for host in topo["hosts"] if host["ip"] == vswitch_ip]
-        hostname = hostname[0] if len(hostname) != 0 else ""
-
-        name = "device:vswitch" + str(node_id)
-        vswitches.append(
-            {
-                "name": name,
-                "ip": vswitch_ip,
-                "default-intf": str(node_iface),
-                "deviceType": "legacy",
-                "switchId": int(IPAddress(vswitch_ip)),
-                "hostname": hostname,
+        for subnet in topo["subnets"]:
+            if subnet["ip_subnet"] == k8s_cluster_subnet:
+                k8s_subnet = subnet
+                subnet_id = subnet["subnet_id"]
+                break
+        else:
+            k8s_subnet = {
+                "name": k8s_cluster_subnet,
+                "ip_subnet": k8s_cluster_subnet,
+                "subnet_id": subnet_id,
             }
+            subnet_id += 1
+
+        k8s_node_cidrs = []
+        ipam_blocks = k8s.client.CustomObjectsApi().list_cluster_custom_object(
+            group="crd.projectcalico.org", version="v1", plural="ipamblocks"
         )
-        vswitch_links[name] = host_topology.json()["links"]
-    topo['switches'].extend(vswitches)
+        for item in ipam_blocks["items"]:
+            cidr = item["spec"]["cidr"]
+            k8s_node_cidrs.append(
+                {"name": str(cidr), "ip_subnet": str(cidr), "subnet_id": subnet_id}
+            )
+            subnet_id += 1
 
 
-    all_host_subnets = k8s_node_cidrs + [k8s_subnet]
+        vswitch_links = dict()
+        vswitches = []
+        for node_id, node_ip in enumerate(k8s_node_ips):
+            url = INT_HOST_REPORTER_TOPO_API.format(node_ip)
+            host_topology = requests.get(url)
+            if not host_topology.ok:
+                log.fatal("Unable to access Topology API from K8s node %s\n%s", node_ip, host_topology.text)
 
-    # Overrides links in the topology config.
-    # Connects the physical switch to the host vswitch
-    for link in topo["links"]:
-        for sw in vswitches:
-            # find IP of an attached host
-            host_ip = [host["ip"] for host in topo["hosts"] if host["name"] == link["node2"]]
-            host_ip = host_ip[0] if len(host_ip) != 0 else ""
-            if host_ip == sw["ip"]:
-                link["port2"] = sw["default-intf"]
-                link["node2"] = sw["name"]
-
-    # Connect vswitch to all possible subnets with all possible ports.
-    for sw in vswitches:
-        for host_subnet in all_host_subnets:
-            for link in vswitch_links[sw["name"]]:
+            for link in host_topology.json()["links"]:
                 if link["is-node-iface"]:
-                    # skip data interfaces
-                    continue
-                topo["links"].append(
-                    {
-                        "node1": sw["name"],
-                        "node2": host_subnet["name"],
-                        "port1": str(link["id"]),
-                        "port2": "-1",
-                    }
-                )
+                    node_iface = link["id"]
+                    vswitch_ip = link["ip-addresses"][0]
 
-    # Overrides subnets in the topology config.
-    if k8s_subnet not in topo["subnets"]:
-        topo["subnets"].append(k8s_subnet)
-    topo["subnets"] += k8s_node_cidrs
+            hostname = [host["name"] for host in topo["hosts"] if host["ip"] == vswitch_ip]
+            hostname = hostname[0] if len(hostname) != 0 else ""
+
+            name = "device:vswitch" + str(node_id)
+            vswitches.append(
+                {
+                    "name": name,
+                    "ip": vswitch_ip,
+                    "default-intf": str(node_iface),
+                    "deviceType": "legacy",
+                    "switchId": int(IPAddress(vswitch_ip)),
+                    "hostname": hostname,
+                }
+            )
+            vswitch_links[name] = host_topology.json()["links"]
+        topo['switches'].extend(vswitches)
+
+        all_host_subnets = k8s_node_cidrs + [k8s_subnet]
+
+        # Overrides links in the topology config.
+        # Connects the physical switch to the host vswitch
+        for link in topo["links"]:
+            for sw in vswitches:
+                # find IP of an attached host
+                host_ip = [host["ip"] for host in topo["hosts"] if host["name"] == link["node2"]]
+                host_ip = host_ip[0] if len(host_ip) != 0 else ""
+                if host_ip == sw["ip"]:
+                    link["port2"] = sw["default-intf"]
+                    link["node2"] = sw["name"]
+
+        # Connect vswitch to all possible subnets with all possible ports.
+        for sw in vswitches:
+            for host_subnet in all_host_subnets:
+                for link in vswitch_links[sw["name"]]:
+                    if link["is-node-iface"]:
+                        # skip data interfaces
+                        continue
+                    topo["links"].append(
+                        {
+                            "node1": sw["name"],
+                            "node2": host_subnet["name"],
+                            "port1": str(link["id"]),
+                            "port2": "-1",
+                        }
+                    )
+
+        # Overrides subnets in the topology config.
+        if k8s_subnet not in topo["subnets"]:
+            topo["subnets"].append(k8s_subnet)
+        topo["subnets"] += k8s_node_cidrs
 
     return topo

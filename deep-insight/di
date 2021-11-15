@@ -30,12 +30,15 @@ sp.add_argument(
     default="rocks",
 )
 sp.add_argument(
-    "--k8s-subnet",
-    help="Default K8s cluster subnet used for inter-node communication (in the CIDR format).",
-    type=str,
-    default="",
+    "-k",
+    "--k8s-cluster",
+    help="K8s cluster info (format: config=<KUBE_CONFIG>,subnet=<SUBNET>). \
+          'config' is a local path to .kube/config file (optional, default is ~/.kube/config). \
+          'subnet' is a default K8s cluster subnet used for inter-node communication (in the CIDR format).",
+    type=lambda x: {k:str(v) for k,v in (i.split('=') for i in x.split(','))},
+    action="append",
+    default=[],
 )
-sp.add_argument("--k8s-config", help="Kubernetes config", type=str, default=None)
 sp.add_argument(
     "-o",
     "--output",
@@ -48,15 +51,16 @@ args = parser.parse_args()
 
 def main():
     if args.command == "gen-topology":
-        with_end_host = args.k8s_subnet != ""
+        with_end_host = len(args.k8s_cluster) > 0
         onos_url = f"http://{args.onos_address}/onos/v1"
+        # remove duplicates from dictionary
+        k8s_clusters = map(dict, set(tuple(sorted(d.items())) for d in args.k8s_cluster))
         topo_json = gen_topo(
             onos_url,
             args.onos_user,
             args.onos_password,
             with_end_host,
-            args.k8s_subnet,
-            args.k8s_config,
+            k8s_clusters,
         )
         if args.output:
             with open(args.output, "w") as f:
