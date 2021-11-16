@@ -35,7 +35,7 @@ sp.add_argument(
     help="K8s cluster info (format: config=<KUBE_CONFIG>,subnet=<SUBNET>). \
           'config' is a local path to .kube/config file (optional, default is ~/.kube/config). \
           'subnet' is a default K8s cluster subnet used for inter-node communication (in the CIDR format).",
-    type=lambda x: {k:str(v) for k,v in (i.split('=') for i in x.split(','))},
+    type=lambda x: {k:v for k,v in (i.split('=') for i in x.split(','))},
     action="append",
     default=[],
 )
