@@ -14,12 +14,26 @@ log = logging.getLogger("DeepInsightTopoUtility")
 
 INT_HOST_REPORTER_TOPO_API="http://{}:4048/api/v1/topology"
 
-def parse_port_string(port_string):
+PORT_MAPPINGS = {}
+
+def parse_port_id(port_string):
     # Port string can be "[port/channel](id)" or just "id".
     # Only return the ID of port.
     match = re.match(r"\[([0-9]+/[0-9]+)\]\(([0-9]+)\)", port_string)
     if not match:
+        return int(port_string)
+    else:
+        return int(match.group(2))
+
+def parse_port_name(port_string):
+    # Port string can be "[port/channel](id)" or just "id".
+    # Return the "port/channel" string, if exists.
+    # Otherwise, return the ID of port.
+    match = re.match(r"\[([0-9]+/[0-9]+)\]\(([0-9]+)\)", port_string)
+    if not match:
         return port_string
+    elif match.group(1):
+        return match.group(1)
     else:
         return match.group(2)
 
@@ -65,6 +79,23 @@ def gen_topo(
             }
         )
 
+    devices = requests.get(onos_url + "/devices", auth=auth)
+    if not devices.ok:
+        log.fatal("Unable to retrieve devices\n%s", devices.text)
+    devices = devices.json()["devices"]
+    for device in devices:
+        device_ports = requests.get(onos_url + "/devices/" + device['id'] + "/ports", auth=auth)
+        if not device_ports.ok:
+            log.fatal("Unable to retrieve ports of device\n%s", device_ports.text)
+        for elem in device_ports.json()['ports']:
+            port_name = parse_port_name(elem['port'])
+            port_id = parse_port_id(elem['port'])
+            if not device['id'] in PORT_MAPPINGS:
+                PORT_MAPPINGS[device['id']] = {}
+            PORT_MAPPINGS[device['id']][port_id] = port_name
+
+    print(PORT_MAPPINGS)
+
     subnets = defaultdict(lambda: {})
     for key, value in netcfg["ports"].items():
         if "interfaces" not in value:
@@ -86,9 +117,10 @@ def gen_topo(
             topo["links"].append(
                 {
                     "node1": switch_id,
-                    "port1": port_num,
+                    "port1": PORT_MAPPINGS[switch_id][int(port_num)],
                     "node2": subnet,
                     "port2": "-1",
+                    "switchPort1": int(port_num),
                 }
             )
         subnet_id = subnet_id + 1
@@ -120,12 +152,14 @@ def gen_topo(
                 }
             )
             for location in host["locations"]:
+                port_num = parse_port_id(location["port"])
                 topo["links"].append(
                     {
                         "node1": location["elementId"],
-                        "port1": parse_port_string(location["port"]),
+                        "port1": PORT_MAPPINGS[location["elementId"]][int(port_num)],
                         "node2": unique_name,
                         "port2": "-1",
+                        "switchPort1": port_num,
                     }
                 )
             host_ip_to_locations[ip] = host["locations"]
@@ -169,9 +203,10 @@ def gen_topo(
                             topo["links"].append(
                                 {
                                     "node1": switch_id,
-                                    "port1": port_num,
+                                    "port1": PORT_MAPPINGS[switch_id][int(port_num)],
                                     "node2": uepool,
                                     "port2": "-1",
+                                    "switchPort1": int(port_num),
                                 }
                             )
         elif app == "org.onosproject.route-service":
@@ -188,12 +223,14 @@ def gen_topo(
                 subnet_id = subnet_id + 1
                 route_locations = host_ip_to_locations.get(next_hop, [])
                 for route_location in route_locations:
+                    port_num = parse_port_id(route_location["port"])
                     topo["links"].append(
                         {
                             "node1": route_location["elementId"],
-                            "port1": parse_port_string(route_location["port"]),
+                            "port1": PORT_MAPPINGS[route_location["elementId"]][int(port_num)],
                             "node2": prefix,
                             "port2": "-1",
+                            "switchPort1": port_num,
                         }
                     )
 
@@ -204,11 +241,15 @@ def gen_topo(
         key = [str(link["src"]), str(link["dst"])]
         key.sort()
         key = tuple(key)
+        port1_num = parse_port_id(link["src"]["port"])
+        port2_num = parse_port_id(link["dst"]["port"])
         bidi_links[key] = {
             "node1": link["src"]["device"],
-            "port1": parse_port_string(link["src"]["port"]),
+            "port1": PORT_MAPPINGS[link["src"]["device"]][int(port1_num)],
             "node2": link["dst"]["device"],
-            "port2": parse_port_string(link["dst"]["port"]),
+            "port2": PORT_MAPPINGS[link["dst"]["device"]][int(port2_num)],
+            "switchPort1": port1_num,
+            "switchPort2": port2_num,
         }
     topo["links"].extend(bidi_links.values())
 
@@ -278,7 +319,7 @@ def gen_topo(
                     "ip": vswitch_ip,
                     "default-intf": str(node_iface),
                     "deviceType": "legacy",
-                    "switchId": int(IPAddress(vswitch_ip)),
+                    "switchId": int(IPAddress(node_ip)),
                     "hostname": hostname,
                 }
             )
@@ -297,6 +338,7 @@ def gen_topo(
                 if host_ip == sw["ip"]:
                     link["port2"] = sw["default-intf"]
                     link["node2"] = sw["name"]
+                    link["switchPort2"] = int(sw["default-intf"])
 
         # Connect vswitch to all possible subnets with all possible ports.
         for sw in vswitches:
@@ -311,6 +353,7 @@ def gen_topo(
                             "node2": host_subnet["name"],
                             "port1": str(link["id"]),
                             "port2": "-1",
+                            "switchPort1": int(link["id"]),
                         }
                     )
 
