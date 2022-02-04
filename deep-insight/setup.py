@@ -1,5 +1,5 @@
 # SPDX-FileCopyrightText: Copyright 2021-present Open Networking Foundation.
-# SPDX-License-Identifier: LicenseRef-ONF-Member-Only-1.0
+# SPDX-License-Identifier: Apache-2.0
 
 import os
 
@@ -25,7 +25,7 @@ setup(
         "Programming Language :: Python :: 3",
     ],
     description="The utility for DeepInsight",
-    license="LicenseRef-ONF-Member-Only-1.0",
+    license="Apache-2.0",
     url="https://github.com/opennetworkinglab/sdfabric-utils/",
     scripts=[
         "di"
